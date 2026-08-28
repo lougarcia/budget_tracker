@@ -295,159 +295,164 @@ const totalAnnualCost = activeRecurring.reduce((sum: number, r: any) => sum + ca
   </div>
 
   <script define:vars={{ trackerId }}>
-    const modal = document.getElementById('recurring-modal');
-    const openBtn = document.getElementById('add-recurring-btn');
-    const closeBtn = document.getElementById('close-recurring-modal');
-    const form = document.getElementById('recurring-form');
-    const errorDiv = document.getElementById('recurring-error');
-    const modalTitle = document.getElementById('modal-title');
-    const modalRecurringId = document.getElementById('modal-recurring-id');
-    const submitBtn = document.getElementById('submit-btn');
-    const typeSelect = document.getElementById('rec-type');
-    const categorySelect = document.getElementById('rec-category');
+    function setupRecurring() {
+      const modal = document.getElementById('recurring-modal');
+      const openBtn = document.getElementById('add-recurring-btn');
+      const closeBtn = document.getElementById('close-recurring-modal');
+      const form = document.getElementById('recurring-form');
+      const errorDiv = document.getElementById('recurring-error');
+      const modalTitle = document.getElementById('modal-title');
+      const modalRecurringId = document.getElementById('modal-recurring-id');
+      const submitBtn = document.getElementById('submit-btn');
+      const typeSelect = document.getElementById('rec-type');
+      const categorySelect = document.getElementById('rec-category');
 
-    let isEditing = false;
+      let isEditing = false;
 
-    typeSelect?.addEventListener('change', () => {
-      const selectedType = typeSelect.value;
-      Array.from(categorySelect.options).forEach((opt) => {
-        const type = opt.getAttribute('data-type');
-        if (type === selectedType) {
-          opt.hidden = false;
-        } else {
-          opt.hidden = true;
-        }
+      typeSelect?.addEventListener('change', () => {
+        const selectedType = typeSelect.value;
+        Array.from(categorySelect.options).forEach((opt) => {
+          const type = opt.getAttribute('data-type');
+          if (type === selectedType) {
+            opt.hidden = false;
+          } else {
+            opt.hidden = true;
+          }
+        });
+        const firstVisible = Array.from(categorySelect.options).find(opt => !opt.hidden);
+        if (firstVisible) categorySelect.value = firstVisible.value;
       });
-      const firstVisible = Array.from(categorySelect.options).find(opt => !opt.hidden);
-      if (firstVisible) categorySelect.value = firstVisible.value;
-    });
-    typeSelect?.dispatchEvent(new Event('change'));
-
-    openBtn?.addEventListener('click', () => {
-      isEditing = false;
-      if (modalTitle) modalTitle.textContent = 'Add Recurring Transaction';
-      if (submitBtn) submitBtn.textContent = 'Save Recurring';
-      if (modalRecurringId) modalRecurringId.value = '';
-      form?.reset();
       typeSelect?.dispatchEvent(new Event('change'));
-      modal?.classList.remove('hidden');
-      modal?.classList.add('flex');
-    });
 
-    closeBtn?.addEventListener('click', () => {
-      modal?.classList.add('hidden');
-      modal?.classList.remove('flex');
-    });
+      openBtn?.addEventListener('click', () => {
+        isEditing = false;
+        if (modalTitle) modalTitle.textContent = 'Add Recurring Transaction';
+        if (submitBtn) submitBtn.textContent = 'Save Recurring';
+        if (modalRecurringId) modalRecurringId.value = '';
+        form?.reset();
+        typeSelect?.dispatchEvent(new Event('change'));
+        modal?.classList.remove('hidden');
+        modal?.classList.add('flex');
+      });
 
-    window.openEditModal = (id, merchant, type, amount, categoryId, frequency, startDate, endDate, description) => {
-      isEditing = true;
-      if (modalTitle) modalTitle.textContent = 'Edit Recurring Transaction';
-      if (submitBtn) submitBtn.textContent = 'Update Recurring';
-      if (modalRecurringId) modalRecurringId.value = id;
-      
-      const merchantInput = document.getElementById('rec-merchant');
-      const amountInput = document.getElementById('rec-amount');
-      const frequencySelect = document.getElementById('rec-frequency');
-      const startInput = document.getElementById('rec-start');
-      const endInput = document.getElementById('rec-end');
-      const descInput = document.getElementById('rec-description');
-      
-      if (merchantInput) merchantInput.value = merchant;
-      if (amountInput) amountInput.value = amount / 100;
-      if (typeSelect) typeSelect.value = type;
-      if (categorySelect) categorySelect.value = categoryId;
-      if (frequencySelect) frequencySelect.value = frequency;
-      if (startInput) startInput.value = startDate;
-      if (endInput) endInput.value = endDate;
-      if (descInput) descInput.value = description;
-      
-      typeSelect?.dispatchEvent(new Event('change'));
-      modal?.classList.remove('hidden');
-      modal?.classList.add('flex');
-    };
+      closeBtn?.addEventListener('click', () => {
+        modal?.classList.add('hidden');
+        modal?.classList.remove('flex');
+      });
 
-    form?.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      if (errorDiv) errorDiv.classList.add('hidden');
-      const formData = new FormData(form);
-      const rawAmount = parseFloat(formData.get('amount') || '0');
-      const amountCents = Math.round(rawAmount * 100);
-
-      const payload = {
-        trackerId,
-        merchant: formData.get('merchant'),
-        type: formData.get('type'),
-        amount: amountCents,
-        categoryId: formData.get('categoryId'),
-        frequency: formData.get('frequency'),
-        startDate: formData.get('startDate'),
-        endDate: formData.get('endDate') || null,
-        description: formData.get('description') || null,
+      window.openEditModal = (id, merchant, type, amount, categoryId, frequency, startDate, endDate, description) => {
+        isEditing = true;
+        if (modalTitle) modalTitle.textContent = 'Edit Recurring Transaction';
+        if (submitBtn) submitBtn.textContent = 'Update Recurring';
+        if (modalRecurringId) modalRecurringId.value = id;
+        
+        const merchantInput = document.getElementById('rec-merchant');
+        const amountInput = document.getElementById('rec-amount');
+        const frequencySelect = document.getElementById('rec-frequency');
+        const startInput = document.getElementById('rec-start');
+        const endInput = document.getElementById('rec-end');
+        const descInput = document.getElementById('rec-description');
+        
+        if (merchantInput) merchantInput.value = merchant;
+        if (amountInput) amountInput.value = amount / 100;
+        if (typeSelect) typeSelect.value = type;
+        if (categorySelect) categorySelect.value = categoryId;
+        if (frequencySelect) frequencySelect.value = frequency;
+        if (startInput) startInput.value = startDate;
+        if (endInput) endInput.value = endDate;
+        if (descInput) descInput.value = description;
+        
+        typeSelect?.dispatchEvent(new Event('change'));
+        modal?.classList.remove('hidden');
+        modal?.classList.add('flex');
       };
 
-      const action = isEditing ? 'recurring.update' : 'recurring.create';
-      if (isEditing) {
-        payload.id = modalRecurringId.value;
-      }
+      form?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (errorDiv) errorDiv.classList.add('hidden');
+        const formData = new FormData(form);
+        const rawAmount = parseFloat(formData.get('amount') || '0');
+        const amountCents = Math.round(rawAmount * 100);
 
-      try {
-        const res = await fetch('/api/rpc', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action, payload }),
-        });
-        const data = await res.json();
-        if (data.success) {
-          window.location.reload();
-        } else {
+        const payload = {
+          trackerId,
+          merchant: formData.get('merchant'),
+          type: formData.get('type'),
+          amount: amountCents,
+          categoryId: formData.get('categoryId'),
+          frequency: formData.get('frequency'),
+          startDate: formData.get('startDate'),
+          endDate: formData.get('endDate') || null,
+          description: formData.get('description') || null,
+        };
+
+        const action = isEditing ? 'recurring.update' : 'recurring.create';
+        if (isEditing) {
+          payload.id = modalRecurringId.value;
+        }
+
+        try {
+          const res = await fetch('/api/rpc', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action, payload }),
+          });
+          const data = await res.json();
+          if (data.success) {
+            window.location.reload();
+          } else {
+            if (errorDiv) {
+              errorDiv.textContent = data.error.message;
+              errorDiv.classList.remove('hidden');
+            }
+          }
+        } catch (err) {
           if (errorDiv) {
-            errorDiv.textContent = data.error.message;
+            errorDiv.textContent = 'Failed to save recurring transaction';
             errorDiv.classList.remove('hidden');
           }
         }
-      } catch (err) {
-        if (errorDiv) {
-          errorDiv.textContent = 'Failed to save recurring transaction';
-          errorDiv.classList.remove('hidden');
-        }
-      }
-    });
+      });
 
-    window.toggleRecurring = async (id, active) => {
-      try {
-        const res = await fetch('/api/rpc', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'recurring.toggle', payload: { id, trackerId, active } }),
-        });
-        const data = await res.json();
-        if (data.success) {
-          window.location.reload();
-        } else {
-          alert(data.error.message || 'Failed to update recurring transaction');
+      window.toggleRecurring = async (id, active) => {
+        try {
+          const res = await fetch('/api/rpc', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'recurring.toggle', payload: { id, trackerId, active } }),
+          });
+          const data = await res.json();
+          if (data.success) {
+            window.location.reload();
+          } else {
+            alert(data.error.message || 'Failed to update recurring transaction');
+          }
+        } catch (err) {
+          alert('Failed to update recurring transaction');
         }
-      } catch (err) {
-        alert('Failed to update recurring transaction');
-      }
-    };
+      };
 
-    window.deleteRecurring = async (id, merchant) => {
-      if (!confirm(`Are you sure you want to delete "${merchant}"? This cannot be undone.`)) return;
-      try {
-        const res = await fetch('/api/rpc', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'recurring.delete', payload: { id, trackerId } }),
-        });
-        const data = await res.json();
-        if (data.success) {
-          window.location.reload();
-        } else {
-          alert(data.error.message || 'Failed to delete recurring transaction');
+      window.deleteRecurring = async (id, merchant) => {
+        if (!confirm(`Are you sure you want to delete "${merchant}"? This cannot be undone.`)) return;
+        try {
+          const res = await fetch('/api/rpc', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'recurring.delete', payload: { id, trackerId } }),
+          });
+          const data = await res.json();
+          if (data.success) {
+            window.location.reload();
+          } else {
+            alert(data.error.message || 'Failed to delete recurring transaction');
+          }
+        } catch (err) {
+          alert('Failed to delete recurring transaction');
         }
-      } catch (err) {
-        alert('Failed to delete recurring transaction');
-      }
-    };
+      };
+    }
+
+    document.addEventListener('astro:page-load', setupRecurring);
+    setupRecurring();
   </script>
 </Layout>

@@ -175,72 +175,77 @@ const invitations = await db
   </div>
 
   <script define:vars={{ trackerId }}>
-    const modal = document.getElementById('invite-modal');
-    const openBtn = document.getElementById('invite-btn');
-    const closeBtn = document.getElementById('close-invite-modal');
-    const form = document.getElementById('invite-form');
-    const errorDiv = document.getElementById('invite-error');
+    function setupCollaborate() {
+      const modal = document.getElementById('invite-modal');
+      const openBtn = document.getElementById('invite-btn');
+      const closeBtn = document.getElementById('close-invite-modal');
+      const form = document.getElementById('invite-form');
+      const errorDiv = document.getElementById('invite-error');
 
-    openBtn?.addEventListener('click', () => {
-      modal?.classList.remove('hidden');
-      modal?.classList.add('flex');
-    });
-    closeBtn?.addEventListener('click', () => {
-      modal?.classList.add('hidden');
-      modal?.classList.remove('flex');
-    });
+      openBtn?.addEventListener('click', () => {
+        modal?.classList.remove('hidden');
+        modal?.classList.add('flex');
+      });
+      closeBtn?.addEventListener('click', () => {
+        modal?.classList.add('hidden');
+        modal?.classList.remove('flex');
+      });
 
-    form?.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      if (errorDiv) errorDiv.classList.add('hidden');
-      const formData = new FormData(form);
+      form?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (errorDiv) errorDiv.classList.add('hidden');
+        const formData = new FormData(form);
 
-      const payload = {
-        trackerId,
-        inviteeEmail: formData.get('inviteeEmail'),
-        role: formData.get('role'),
-      };
+        const payload = {
+          trackerId,
+          inviteeEmail: formData.get('inviteeEmail'),
+          role: formData.get('role'),
+        };
 
-      try {
-        const res = await fetch('/api/rpc', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'invitation.create', payload }),
-        });
-        const data = await res.json();
-        if (data.success) {
-          window.location.reload();
-        } else {
+        try {
+          const res = await fetch('/api/rpc', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'invitation.create', payload }),
+          });
+          const data = await res.json();
+          if (data.success) {
+            window.location.reload();
+          } else {
+            if (errorDiv) {
+              errorDiv.textContent = data.error.message;
+              errorDiv.classList.remove('hidden');
+            }
+          }
+        } catch (err) {
           if (errorDiv) {
-            errorDiv.textContent = data.error.message;
+            errorDiv.textContent = 'Failed to send invitation';
             errorDiv.classList.remove('hidden');
           }
         }
-      } catch (err) {
-        if (errorDiv) {
-          errorDiv.textContent = 'Failed to send invitation';
-          errorDiv.classList.remove('hidden');
-        }
-      }
-    });
+      });
 
-    window.cancelInvitation = async (invId) => {
-      if (!confirm('Are you sure you want to cancel this invitation?')) return;
-      try {
-        const res = await fetch('/api/rpc', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'invitation.cancel', payload: { id: invId, trackerId } }),
-        });
-        const data = await res.json();
-        if (data.success) {
-          window.location.reload();
-        } else {
-          alert(data.error.message || 'Failed to cancel invitation');
+      window.cancelInvitation = async (invId) => {
+        if (!confirm('Are you sure you want to cancel this invitation?')) return;
+        try {
+          const res = await fetch('/api/rpc', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'invitation.cancel', payload: { id: invId, trackerId } }),
+          });
+          const data = await res.json();
+          if (data.success) {
+            window.location.reload();
+          } else {
+            alert(data.error.message || 'Failed to cancel invitation');
+          }
+        } catch (err) {
+          alert('Failed to cancel invitation');
         }
-      } catch (err) {
-        alert('Failed to cancel invitation');
-      }
-    };
+      };
+    }
+
+    document.addEventListener('astro:page-load', setupCollaborate);
+    setupCollaborate();
   </script>
 </Layout>

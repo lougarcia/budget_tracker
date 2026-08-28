@@ -251,103 +251,108 @@ const savingsRate = totalIncome > 0 ? Math.max(0, netIncome / totalIncome) : 0;
   </div>
 
   <script define:vars={{ trackerId, year, month }}>
-    const modal = document.getElementById('tx-modal');
-    const openBtn = document.getElementById('open-tx-modal');
-    const closeBtn = document.getElementById('close-tx-modal');
-    const form = document.getElementById('tx-form');
-    const errorDiv = document.getElementById('tx-modal-error');
-    const typeSelect = document.getElementById('tx-type');
-    const categorySelect = document.getElementById('category-select');
+    function setupDashboard() {
+      const modal = document.getElementById('tx-modal');
+      const openBtn = document.getElementById('open-tx-modal');
+      const closeBtn = document.getElementById('close-tx-modal');
+      const form = document.getElementById('tx-form');
+      const errorDiv = document.getElementById('tx-modal-error');
+      const typeSelect = document.getElementById('tx-type');
+      const categorySelect = document.getElementById('category-select');
 
-    openBtn?.addEventListener('click', () => {
-      modal?.classList.remove('hidden');
-      modal?.classList.add('flex');
-    });
-    closeBtn?.addEventListener('click', () => {
-      modal?.classList.add('hidden');
-      modal?.classList.remove('flex');
-    });
-
-    typeSelect?.addEventListener('change', () => {
-      const selectedType = typeSelect.value;
-      Array.from(categorySelect.options).forEach((opt) => {
-        const type = opt.getAttribute('data-type');
-        if (type === selectedType) {
-          opt.hidden = false;
-          if (categorySelect.value !== opt.value && !categorySelect.selectedOptions.length) {
-            categorySelect.value = opt.value;
-          }
-        } else {
-          opt.hidden = true;
-        }
+      openBtn?.addEventListener('click', () => {
+        modal?.classList.remove('hidden');
+        modal?.classList.add('flex');
       });
-      const firstVisible = Array.from(categorySelect.options).find(opt => !opt.hidden);
-      if (firstVisible) categorySelect.value = firstVisible.value;
-    });
-    typeSelect?.dispatchEvent(new Event('change'));
+      closeBtn?.addEventListener('click', () => {
+        modal?.classList.add('hidden');
+        modal?.classList.remove('flex');
+      });
 
-    const monthSelect = document.getElementById('month-select');
-    const yearSelect = document.getElementById('year-select');
-
-    function updatePeriod() {
-      const m = monthSelect.value;
-      const y = yearSelect.value;
-      window.location.href = `/app/trackers/${trackerId}?year=${y}&month=${m}`;
-    }
-
-    monthSelect?.addEventListener('change', updatePeriod);
-    yearSelect?.addEventListener('change', updatePeriod);
-
-    form?.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      if (errorDiv) errorDiv.classList.add('hidden');
-      const formData = new FormData(form);
-      const rawAmount = parseFloat(formData.get('amount') || '0');
-      const amountCents = Math.round(rawAmount * 100);
-
-      const payload = {
-        trackerId,
-        type: formData.get('type'),
-        amount: amountCents,
-        currency: 'USD',
-        transactionDate: formData.get('transactionDate'),
-        merchant: formData.get('merchant'),
-        description: formData.get('description'),
-        categoryId: formData.get('categoryId'),
-      };
-
-      try {
-        const res = await fetch('/api/rpc', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'transaction.create', payload }),
+      typeSelect?.addEventListener('change', () => {
+        const selectedType = typeSelect.value;
+        Array.from(categorySelect.options).forEach((opt) => {
+          const type = opt.getAttribute('data-type');
+          if (type === selectedType) {
+            opt.hidden = false;
+            if (categorySelect.value !== opt.value && !categorySelect.selectedOptions.length) {
+              categorySelect.value = opt.value;
+            }
+          } else {
+            opt.hidden = true;
+          }
         });
-        const data = await res.json();
-        if (data.success) {
-          window.location.reload();
-        } else {
+        const firstVisible = Array.from(categorySelect.options).find(opt => !opt.hidden);
+        if (firstVisible) categorySelect.value = firstVisible.value;
+      });
+      typeSelect?.dispatchEvent(new Event('change'));
+
+      const monthSelect = document.getElementById('month-select');
+      const yearSelect = document.getElementById('year-select');
+
+      function updatePeriod() {
+        const m = monthSelect.value;
+        const y = yearSelect.value;
+        window.location.href = `/app/trackers/${trackerId}?year=${y}&month=${m}`;
+      }
+
+      monthSelect?.addEventListener('change', updatePeriod);
+      yearSelect?.addEventListener('change', updatePeriod);
+
+      form?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (errorDiv) errorDiv.classList.add('hidden');
+        const formData = new FormData(form);
+        const rawAmount = parseFloat(formData.get('amount') || '0');
+        const amountCents = Math.round(rawAmount * 100);
+
+        const payload = {
+          trackerId,
+          type: formData.get('type'),
+          amount: amountCents,
+          currency: 'USD',
+          transactionDate: formData.get('transactionDate'),
+          merchant: formData.get('merchant'),
+          description: formData.get('description'),
+          categoryId: formData.get('categoryId'),
+        };
+
+        try {
+          const res = await fetch('/api/rpc', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'transaction.create', payload }),
+          });
+          const data = await res.json();
+          if (data.success) {
+            window.location.reload();
+          } else {
+            if (errorDiv) {
+              errorDiv.textContent = data.error.message;
+              errorDiv.classList.remove('hidden');
+            }
+          }
+        } catch (err) {
           if (errorDiv) {
-            errorDiv.textContent = data.error.message;
+            errorDiv.textContent = 'Failed to create transaction';
             errorDiv.classList.remove('hidden');
           }
         }
-      } catch (err) {
-        if (errorDiv) {
-          errorDiv.textContent = 'Failed to create transaction';
-          errorDiv.classList.remove('hidden');
-        }
-      }
-    });
-
-    if (typeof gsap !== 'undefined') {
-      gsap.from('.grid > div', {
-        y: 20,
-        opacity: 0,
-        duration: 0.5,
-        stagger: 0.1,
-        ease: 'power2.out',
       });
+
+      if (typeof gsap !== 'undefined') {
+        gsap.from('.grid > div', {
+          y: 20,
+          opacity: 0,
+          duration: 0.5,
+          stagger: 0.1,
+          ease: 'power2.out',
+        });
+      }
     }
+
+    document.addEventListener('astro:page-load', setupDashboard);
+    setupDashboard();
   </script>
   <script>
     import gsap from 'gsap';

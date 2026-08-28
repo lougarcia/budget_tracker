@@ -176,107 +176,112 @@ const expenseCategories = trackerCategories.filter((c: any) => c.type === 'expen
   </div>
 
   <script define:vars={{ trackerId }}>
-    const modal = document.getElementById('category-modal');
-    const openBtn = document.getElementById('add-category-btn');
-    const closeBtn = document.getElementById('close-category-modal');
-    const form = document.getElementById('category-form');
-    const errorDiv = document.getElementById('category-error');
-    const modalTitle = document.getElementById('modal-title');
-    const modalCatId = document.getElementById('modal-cat-id');
-    const submitBtn = document.getElementById('submit-btn');
+    function setupCategories() {
+      const modal = document.getElementById('category-modal');
+      const openBtn = document.getElementById('add-category-btn');
+      const closeBtn = document.getElementById('close-category-modal');
+      const form = document.getElementById('category-form');
+      const errorDiv = document.getElementById('category-error');
+      const modalTitle = document.getElementById('modal-title');
+      const modalCatId = document.getElementById('modal-cat-id');
+      const submitBtn = document.getElementById('submit-btn');
 
-    let isEditing = false;
+      let isEditing = false;
 
-    openBtn?.addEventListener('click', () => {
-      isEditing = false;
-      if (modalTitle) modalTitle.textContent = 'Add Category';
-      if (submitBtn) submitBtn.textContent = 'Save Category';
-      if (modalCatId) modalCatId.value = '';
-      form?.reset();
-      modal?.classList.remove('hidden');
-      modal?.classList.add('flex');
-    });
+      openBtn?.addEventListener('click', () => {
+        isEditing = false;
+        if (modalTitle) modalTitle.textContent = 'Add Category';
+        if (submitBtn) submitBtn.textContent = 'Save Category';
+        if (modalCatId) modalCatId.value = '';
+        form?.reset();
+        modal?.classList.remove('hidden');
+        modal?.classList.add('flex');
+      });
 
-    closeBtn?.addEventListener('click', () => {
-      modal?.classList.add('hidden');
-      modal?.classList.remove('flex');
-    });
+      closeBtn?.addEventListener('click', () => {
+        modal?.classList.add('hidden');
+        modal?.classList.remove('flex');
+      });
 
-    window.openEditModal = (id, name, type, color, icon) => {
-      isEditing = true;
-      if (modalTitle) modalTitle.textContent = 'Edit Category';
-      if (submitBtn) submitBtn.textContent = 'Update Category';
-      if (modalCatId) modalCatId.value = id;
-      const nameInput = document.getElementById('cat-name');
-      const typeSelect = document.getElementById('cat-type');
-      const colorInput = document.getElementById('cat-color');
-      const iconInput = document.getElementById('cat-icon');
-      if (nameInput) nameInput.value = name;
-      if (typeSelect) typeSelect.value = type;
-      if (colorInput) colorInput.value = color || '#000000';
-      if (iconInput) iconInput.value = icon || '';
-      modal?.classList.remove('hidden');
-      modal?.classList.add('flex');
-    };
-
-    form?.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      if (errorDiv) errorDiv.classList.add('hidden');
-      const formData = new FormData(form);
-
-      const payload = {
-        trackerId,
-        name: formData.get('name'),
-        type: formData.get('type'),
-        color: formData.get('color') || null,
-        icon: formData.get('icon') || null,
+      window.openEditModal = (id, name, type, color, icon) => {
+        isEditing = true;
+        if (modalTitle) modalTitle.textContent = 'Edit Category';
+        if (submitBtn) submitBtn.textContent = 'Update Category';
+        if (modalCatId) modalCatId.value = id;
+        const nameInput = document.getElementById('cat-name');
+        const typeSelect = document.getElementById('cat-type');
+        const colorInput = document.getElementById('cat-color');
+        const iconInput = document.getElementById('cat-icon');
+        if (nameInput) nameInput.value = name;
+        if (typeSelect) typeSelect.value = type;
+        if (colorInput) colorInput.value = color || '#000000';
+        if (iconInput) iconInput.value = icon || '';
+        modal?.classList.remove('hidden');
+        modal?.classList.add('flex');
       };
 
-      const action = isEditing ? 'category.update' : 'category.create';
-      if (isEditing) {
-        payload.id = modalCatId.value;
-      }
+      form?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (errorDiv) errorDiv.classList.add('hidden');
+        const formData = new FormData(form);
 
-      try {
-        const res = await fetch('/api/rpc', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action, payload }),
-        });
-        const data = await res.json();
-        if (data.success) {
-          window.location.reload();
-        } else {
+        const payload = {
+          trackerId,
+          name: formData.get('name'),
+          type: formData.get('type'),
+          color: formData.get('color') || null,
+          icon: formData.get('icon') || null,
+        };
+
+        const action = isEditing ? 'category.update' : 'category.create';
+        if (isEditing) {
+          payload.id = modalCatId.value;
+        }
+
+        try {
+          const res = await fetch('/api/rpc', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action, payload }),
+          });
+          const data = await res.json();
+          if (data.success) {
+            window.location.reload();
+          } else {
+            if (errorDiv) {
+              errorDiv.textContent = data.error.message;
+              errorDiv.classList.remove('hidden');
+            }
+          }
+        } catch (err) {
           if (errorDiv) {
-            errorDiv.textContent = data.error.message;
+            errorDiv.textContent = 'Failed to save category';
             errorDiv.classList.remove('hidden');
           }
         }
-      } catch (err) {
-        if (errorDiv) {
-          errorDiv.textContent = 'Failed to save category';
-          errorDiv.classList.remove('hidden');
-        }
-      }
-    });
+      });
 
-    window.deleteCategory = async (catId, catName) => {
-      if (!confirm(`Are you sure you want to delete "${catName}"? This cannot be undone.`)) return;
-      try {
-        const res = await fetch('/api/rpc', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'category.delete', payload: { id: catId, trackerId } }),
-        });
-        const data = await res.json();
-        if (data.success) {
-          window.location.reload();
-        } else {
-          alert(data.error.message || 'Failed to delete category');
+      window.deleteCategory = async (catId, catName) => {
+        if (!confirm(`Are you sure you want to delete "${catName}"? This cannot be undone.`)) return;
+        try {
+          const res = await fetch('/api/rpc', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'category.delete', payload: { id: catId, trackerId } }),
+          });
+          const data = await res.json();
+          if (data.success) {
+            window.location.reload();
+          } else {
+            alert(data.error.message || 'Failed to delete category');
+          }
+        } catch (err) {
+          alert('Failed to delete category');
         }
-      } catch (err) {
-        alert('Failed to delete category');
-      }
-    };
+      };
+    }
+
+    document.addEventListener('astro:page-load', setupCategories);
+    setupCategories();
   </script>
 </Layout>

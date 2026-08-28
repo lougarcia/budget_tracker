@@ -168,16 +168,21 @@ const topPurchases = [...monthTransactions]
   </div>
 
   <script define:vars={{ trackerId, year, month }}>
-    const monthSelect = document.getElementById('month-select');
-    const yearSelect = document.getElementById('year-select');
+    function setupMonthlyReport() {
+      const monthSelect = document.getElementById('month-select');
+      const yearSelect = document.getElementById('year-select');
 
-    function updatePeriod() {
-      const m = monthSelect.value;
-      const y = yearSelect.value;
-      window.location.href = `/app/trackers/${trackerId}/reports/monthly?year=${y}&month=${m}`;
+      function updatePeriod() {
+        const m = monthSelect.value;
+        const y = yearSelect.value;
+        window.location.href = `/app/trackers/${trackerId}/reports/monthly?year=${y}&month=${m}`;
+      }
+
+      monthSelect?.addEventListener('change', updatePeriod);
+      yearSelect?.addEventListener('change', updatePeriod);
     }
 
-    monthSelect?.addEventListener('change', updatePeriod);
-    yearSelect?.addEventListener('change', updatePeriod);
+    document.addEventListener('astro:page-load', setupMonthlyReport);
+    setupMonthlyReport();
   </script>
 </Layout>

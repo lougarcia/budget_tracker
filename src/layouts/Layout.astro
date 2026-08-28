@@ -47,18 +47,22 @@ const user = Astro.locals.user;
       Personal & Collaborative Budget Tracker — Built with Astro & Cloudflare
     </footer>
     <script is:inline>
-      const logoutBtn = document.getElementById('logout-btn');
-      if (logoutBtn) {
-        logoutBtn.addEventListener('click', async (e) => {
-          e.preventDefault();
-          try {
-            await fetch('/api/auth/sign-out', { method: 'POST' });
-            window.location.href = '/login';
-          } catch (err) {
-            console.error('Logout failed', err);
-          }
-        });
+      function setupLogout() {
+        const logoutBtn = document.getElementById('logout-btn');
+        if (logoutBtn) {
+          logoutBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            try {
+              await fetch('/api/auth/sign-out', { method: 'POST' });
+              window.location.href = '/login';
+            } catch (err) {
+              console.error('Logout failed', err);
+            }
+          });
+        }
       }
+      document.addEventListener('astro:page-load', setupLogout);
+      setupLogout();
     </script>
   </body>
 </html>

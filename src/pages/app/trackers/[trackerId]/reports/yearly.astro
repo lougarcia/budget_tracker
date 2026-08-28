@@ -219,13 +219,18 @@ const maxMonthlyExpense = Math.max(...monthlyBreakdown.map(m => m.expenses));
   </div>
 
   <script define:vars={{ trackerId, year }}>
-    const yearSelect = document.getElementById('year-select');
+    function setupYearlyReport() {
+      const yearSelect = document.getElementById('year-select');
 
-    function updatePeriod() {
-      const y = yearSelect.value;
-      window.location.href = `/app/trackers/${trackerId}/reports/yearly?year=${y}`;
+      function updatePeriod() {
+        const y = yearSelect.value;
+        window.location.href = `/app/trackers/${trackerId}/reports/yearly?year=${y}`;
+      }
+
+      yearSelect?.addEventListener('change', updatePeriod);
     }
 
-    yearSelect?.addEventListener('change', updatePeriod);
+    document.addEventListener('astro:page-load', setupYearlyReport);
+    setupYearlyReport();
   </script>
 </Layout>
