@@ -1,7 +1,7 @@
 ---
 import TrackerLayout from '../../../../layouts/TrackerLayout.astro';
-import { trackers, categories, recurringTransactions } from '../../../../db/schema';
-import { eq, and, asc } from 'drizzle-orm';
+import { trackers, categories, recurringTransactions, trackerMembers } from '../../../../db/schema';
+import { eq, and, asc, inArray } from 'drizzle-orm';
 import { requireTrackerAccess } from '../../../../lib/auth-guards';
 import { formatMoney } from '../../../../lib/money';
 
@@ -18,6 +18,19 @@ const [tracker] = await db.select().from(trackers).where(eq(trackers.id, tracker
 if (!tracker) {
   return Astro.redirect('/app/trackers');
 }
+
+const userMemberships = await db
+  .select({ trackerId: trackerMembers.trackerId, role: trackerMembers.role })
+  .from(trackerMembers)
+  .where(eq(trackerMembers.userId, user.id));
+const userTrackerIds = userMemberships.map(m => m.trackerId);
+const userTrackers = userTrackerIds.length > 0
+  ? await db.select().from(trackers).where(inArray(trackers.id, userTrackerIds))
+  : [];
+const userTrackersWithRole = userTrackers.map(t => {
+  const membership = userMemberships.find(m => m.trackerId === t.id);
+  return { id: t.id, name: t.name, role: membership?.role || 'owner', description: t.description };
+});
 
 const trackerCategories = await db
   .select()
@@ -71,7 +84,7 @@ function calculateAnnualCost(amount: number, frequency: string): number {
 
 const totalAnnualCost = activeRecurring.reduce((sum: number, r: any) => sum + calculateAnnualCost(r.amount, r.frequency), 0);
 ---
-<TrackerLayout title={`Recurring Transactions — ${tracker.name}`} trackerId={trackerId!} trackerName={tracker.name} trackerRole={member.role} trackerDescription={tracker.description} currentPath="recurring" categories={categoryOptions}>
+<TrackerLayout title={`Recurring Transactions — ${tracker.name}`} trackerId={trackerId!} trackerName={tracker.name} trackerRole={member.role} trackerDescription={tracker.description} currentPath="recurring" categories={categoryOptions} userTrackers={userTrackersWithRole}>
   <div class="space-y-8">
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
       <div>
