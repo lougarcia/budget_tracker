@@ -1,0 +1,24 @@
+---
+import Layout from '../layouts/Layout.astro';
+if (Astro.locals.user) {
+  return Astro.redirect('/app/trackers');
+}
+---
+<Layout title="Welcome">
+  <div class="py-16 text-center max-w-3xl mx-auto space-y-8">
+    <h1 class="text-4xl sm:text-6xl font-extrabold text-slate-900 tracking-tight">
+      Master Your Money, <span class="text-indigo-600">Together.</span>
+    </h1>
+    <p class="text-lg text-slate-600">
+      A production-quality personal and collaborative budgeting application. Track income, expenses, monthly budgets, and insightful reports across multiple trackers.
+    </p>
+    <div class="flex justify-center gap-4">
+      <a href="/register" class="bg-indigo-600 text-white font-medium px-6 py-3 rounded-xl hover:bg-indigo-700 transition shadow-lg shadow-indigo-100">
+        Get Started Free
+      </a>
+      <a href="/login" class="bg-white border border-slate-300 text-slate-700 font-medium px-6 py-3 rounded-xl hover:bg-slate-50 transition">
+        Sign In
+      </a>
+    </div>
+  </div>
+</Layout>

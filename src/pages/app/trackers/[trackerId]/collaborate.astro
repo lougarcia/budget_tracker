@@ -1,0 +1,246 @@
+---
+import Layout from '../../../../layouts/Layout.astro';
+import { trackers, trackerMembers, trackerInvitations, user } from '../../../../db/schema';
+import { eq, and, desc } from 'drizzle-orm';
+import { requireTrackerAccess, requireTrackerOwner } from '../../../../lib/auth-guards';
+
+const { trackerId } = Astro.params;
+const currentUser = Astro.locals.user!;
+const db = Astro.locals.db;
+
+const member = await requireTrackerAccess(db, currentUser.id, trackerId!).catch(() => null);
+if (!member) {
+  return Astro.redirect('/app/trackers');
+}
+
+const [tracker] = await db.select().from(trackers).where(eq(trackers.id, trackerId!)).limit(1);
+if (!tracker) {
+  return Astro.redirect('/app/trackers');
+}
+
+const isOwner = member.role === 'owner';
+
+const members = await db
+  .select({
+    id: trackerMembers.id,
+    userId: trackerMembers.userId,
+    role: trackerMembers.role,
+    createdAt: trackerMembers.createdAt,
+    userName: user.name,
+    userEmail: user.email,
+    userImage: user.image,
+  })
+  .from(trackerMembers)
+  .innerJoin(user, eq(trackerMembers.userId, user.id))
+  .where(eq(trackerMembers.trackerId, trackerId!))
+  .orderBy(desc(trackerMembers.createdAt));
+
+const invitations = await db
+  .select()
+  .from(trackerInvitations)
+  .where(
+    and(
+      eq(trackerInvitations.trackerId, trackerId!),
+      eq(trackerInvitations.status, 'pending')
+    )
+  )
+  .orderBy(desc(trackerInvitations.createdAt));
+---
+<Layout title={`Collaborate — ${tracker.name}`}>
+  <div class="space-y-8">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+      <div>
+        <div class="flex items-center gap-3">
+          <a href={`/app/trackers/${trackerId}`} class="text-sm font-medium text-indigo-600 hover:underline">← Back to Dashboard</a>
+          <span class="text-slate-300">/</span>
+          <h1 class="text-2xl font-bold text-slate-900">Collaboration</h1>
+        </div>
+        <p class="text-slate-600 text-sm mt-1">Manage members and invitations for this tracker</p>
+      </div>
+      {isOwner && (
+        <button id="invite-btn" class="bg-indigo-600 text-white font-medium px-4 py-2 rounded-xl hover:bg-indigo-700 transition text-sm">
+          + Invite Member
+        </button>
+      )}
+    </div>
+
+    <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+      <div class="px-6 py-4 border-b border-slate-200">
+        <h2 class="text-lg font-bold text-slate-900">Members ({members.length})</h2>
+      </div>
+      {members.length === 0 ? (
+        <div class="p-12 text-center text-slate-500">
+          <p class="text-base font-medium">No members found.</p>
+        </div>
+      ) : (
+        <div class="divide-y divide-slate-100">
+          {members.map((m: any) => (
+            <div class="px-6 py-4 flex items-center justify-between">
+              <div class="flex items-center gap-4">
+                {m.userImage ? (
+                  <img src={m.userImage} alt="" class="w-10 h-10 rounded-full" />
+                ) : (
+                  <div class="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
+                    <span class="text-indigo-600 font-semibold text-sm">{(m.userName || m.userEmail || '?')[0].toUpperCase()}</span>
+                  </div>
+                )}
+                <div>
+                  <p class="font-semibold text-slate-900">{m.userName || 'Unnamed User'}</p>
+                  <p class="text-xs text-slate-500">{m.userEmail}</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-3">
+                <span class={`text-xs uppercase px-2.5 py-1 font-semibold rounded-full ${
+                  m.role === 'owner' ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-600'
+                }`}>
+                  {m.role}
+                </span>
+                {m.userId === currentUser.id && (
+                  <span class="text-xs text-slate-400">(You)</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+
+    {invitations.length > 0 && (
+      <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+        <div class="px-6 py-4 border-b border-slate-200">
+          <h2 class="text-lg font-bold text-slate-900">Pending Invitations ({invitations.length})</h2>
+        </div>
+        <div class="divide-y divide-slate-100">
+          {invitations.map((inv: any) => (
+            <div class="px-6 py-4 flex items-center justify-between">
+              <div>
+                <p class="font-semibold text-slate-900">{inv.inviteeEmail}</p>
+                <p class="text-xs text-slate-500">
+                  Invited as {inv.role} • Expires {new Date(inv.expiresAt).toLocaleDateString()}
+                </p>
+              </div>
+              {isOwner && (
+                <button
+                  onclick={`cancelInvitation('${inv.id}')`}
+                  class="px-3 py-1 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-700 rounded-lg text-xs font-medium transition"
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+
+    <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+      <h2 class="text-lg font-bold text-slate-900 mb-4">How Collaboration Works</h2>
+      <div class="space-y-3 text-sm text-slate-600">
+        <p><strong>Owners</strong> can manage members, set budgets, and invite new users.</p>
+        <p><strong>Members</strong> can view all data and add transactions.</p>
+        <p>Invitations expire after 7 days if not accepted.</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="invite-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl">
+      <h2 class="text-xl font-bold text-slate-900 mb-4">Invite Member</h2>
+      <form id="invite-form" class="space-y-4">
+        <div>
+          <label for="invitee-email" class="block text-sm font-medium text-slate-700 mb-1">Email Address</label>
+          <input
+            type="email"
+            id="invitee-email"
+            name="inviteeEmail"
+            required
+            placeholder="colleague@example.com"
+            class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+          />
+        </div>
+        <div>
+          <label for="invite-role" class="block text-sm font-medium text-slate-700 mb-1">Role</label>
+          <select name="role" id="invite-role" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            <option value="member">Member</option>
+          </select>
+          <p class="text-xs text-slate-500 mt-1">Members can view data and add transactions.</p>
+        </div>
+        <div id="invite-error" class="text-sm text-red-600 hidden" role="alert"></div>
+        <div class="flex justify-end gap-3 pt-2">
+          <button type="button" id="close-invite-modal" class="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-medium">Cancel</button>
+          <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium">Send Invitation</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script define:vars={{ trackerId }}>
+    const modal = document.getElementById('invite-modal');
+    const openBtn = document.getElementById('invite-btn');
+    const closeBtn = document.getElementById('close-invite-modal');
+    const form = document.getElementById('invite-form');
+    const errorDiv = document.getElementById('invite-error');
+
+    openBtn?.addEventListener('click', () => {
+      modal?.classList.remove('hidden');
+      modal?.classList.add('flex');
+    });
+    closeBtn?.addEventListener('click', () => {
+      modal?.classList.add('hidden');
+      modal?.classList.remove('flex');
+    });
+
+    form?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (errorDiv) errorDiv.classList.add('hidden');
+      const formData = new FormData(form);
+
+      const payload = {
+        trackerId,
+        inviteeEmail: formData.get('inviteeEmail'),
+        role: formData.get('role'),
+      };
+
+      try {
+        const res = await fetch('/api/rpc', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'invitation.create', payload }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          window.location.reload();
+        } else {
+          if (errorDiv) {
+            errorDiv.textContent = data.error.message;
+            errorDiv.classList.remove('hidden');
+          }
+        }
+      } catch (err) {
+        if (errorDiv) {
+          errorDiv.textContent = 'Failed to send invitation';
+          errorDiv.classList.remove('hidden');
+        }
+      }
+    });
+
+    window.cancelInvitation = async (invId) => {
+      if (!confirm('Are you sure you want to cancel this invitation?')) return;
+      try {
+        const res = await fetch('/api/rpc', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'invitation.cancel', payload: { id: invId, trackerId } }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          window.location.reload();
+        } else {
+          alert(data.error.message || 'Failed to cancel invitation');
+        }
+      } catch (err) {
+        alert('Failed to cancel invitation');
+      }
+    };
+  </script>
+</Layout>

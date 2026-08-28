@@ -1,0 +1,453 @@
+---
+import Layout from '../../../../layouts/Layout.astro';
+import { trackers, categories, recurringTransactions } from '../../../../db/schema';
+import { eq, and, asc } from 'drizzle-orm';
+import { requireTrackerAccess } from '../../../../lib/auth-guards';
+import { formatMoney } from '../../../../lib/money';
+
+const { trackerId } = Astro.params;
+const user = Astro.locals.user!;
+const db = Astro.locals.db;
+
+const member = await requireTrackerAccess(db, user.id, trackerId!).catch(() => null);
+if (!member) {
+  return Astro.redirect('/app/trackers');
+}
+
+const [tracker] = await db.select().from(trackers).where(eq(trackers.id, trackerId!)).limit(1);
+if (!tracker) {
+  return Astro.redirect('/app/trackers');
+}
+
+const trackerCategories = await db
+  .select()
+  .from(categories)
+  .where(eq(categories.trackerId, trackerId!));
+
+const recurring = await db
+  .select({
+    id: recurringTransactions.id,
+    type: recurringTransactions.type,
+    amount: recurringTransactions.amount,
+    merchant: recurringTransactions.merchant,
+    description: recurringTransactions.description,
+    frequency: recurringTransactions.frequency,
+    startDate: recurringTransactions.startDate,
+    endDate: recurringTransactions.endDate,
+    nextOccurrence: recurringTransactions.nextOccurrence,
+    active: recurringTransactions.active,
+    categoryId: recurringTransactions.categoryId,
+    categoryName: categories.name,
+    createdAt: recurringTransactions.createdAt,
+  })
+  .from(recurringTransactions)
+  .innerJoin(categories, eq(recurringTransactions.categoryId, categories.id))
+  .where(eq(recurringTransactions.trackerId, trackerId!))
+  .orderBy(asc(recurringTransactions.nextOccurrence));
+
+const activeRecurring = recurring.filter((r: any) => r.active);
+const inactiveRecurring = recurring.filter((r: any) => !r.active);
+
+const frequencyLabels: Record<string, string> = {
+  weekly: 'Weekly',
+  biweekly: 'Biweekly',
+  monthly: 'Monthly',
+  quarterly: 'Quarterly',
+  yearly: 'Yearly',
+};
+
+function calculateAnnualCost(amount: number, frequency: string): number {
+  switch (frequency) {
+    case 'weekly': return amount * 52;
+    case 'biweekly': return amount * 26;
+    case 'monthly': return amount * 12;
+    case 'quarterly': return amount * 4;
+    case 'yearly': return amount;
+    default: return 0;
+  }
+}
+
+const totalAnnualCost = activeRecurring.reduce((sum: number, r: any) => sum + calculateAnnualCost(r.amount, r.frequency), 0);
+---
+<Layout title={`Recurring Transactions — ${tracker.name}`}>
+  <div class="space-y-8">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+      <div>
+        <div class="flex items-center gap-3">
+          <a href={`/app/trackers/${trackerId}`} class="text-sm font-medium text-indigo-600 hover:underline">← Back to Dashboard</a>
+          <span class="text-slate-300">/</span>
+          <h1 class="text-2xl font-bold text-slate-900">Recurring Transactions</h1>
+        </div>
+        <p class="text-slate-600 text-sm mt-1">Manage your subscriptions and recurring bills</p>
+      </div>
+      <button id="add-recurring-btn" class="bg-indigo-600 text-white font-medium px-4 py-2 rounded-xl hover:bg-indigo-700 transition text-sm">
+        + Add Recurring
+      </button>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+      <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <p class="text-sm font-medium text-slate-500">Active Recurring</p>
+        <p class="text-2xl font-extrabold text-indigo-600 mt-2">{activeRecurring.length}</p>
+      </div>
+      <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <p class="text-sm font-medium text-slate-500">Estimated Annual Cost</p>
+        <p class="text-2xl font-extrabold text-rose-600 mt-2">{formatMoney(totalAnnualCost, tracker.currency)}</p>
+      </div>
+      <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <p class="text-sm font-medium text-slate-500">Next Payment Due</p>
+        <p class="text-2xl font-extrabold text-slate-900 mt-2">
+          {activeRecurring.length > 0 ? activeRecurring[0].nextOccurrence : '—'}
+        </p>
+      </div>
+    </div>
+
+    {activeRecurring.length > 0 && (
+      <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+        <div class="px-6 py-4 border-b border-slate-200 bg-emerald-50">
+          <h2 class="text-lg font-bold text-emerald-800">Active ({activeRecurring.length})</h2>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                <th class="px-6 py-3">Merchant</th>
+                <th class="px-6 py-3">Category</th>
+                <th class="px-6 py-3">Frequency</th>
+                <th class="px-6 py-3">Next Due</th>
+                <th class="px-6 py-3 text-right">Amount</th>
+                <th class="px-6 py-3 text-right">Annual Est.</th>
+                <th class="px-6 py-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-sm">
+              {activeRecurring.map((r: any) => (
+                <tr class="hover:bg-slate-50/50 transition">
+                  <td class="px-6 py-4">
+                    <div class="text-slate-900 font-semibold">{r.merchant}</div>
+                    {r.description && (
+                      <div class="text-xs text-slate-500 mt-0.5">{r.description}</div>
+                    )}
+                  </td>
+                  <td class="px-6 py-4">
+                    <span class="px-2.5 py-1 bg-slate-100 text-slate-700 text-xs font-medium rounded-full">{r.categoryName}</span>
+                  </td>
+                  <td class="px-6 py-4 text-slate-600">{frequencyLabels[r.frequency] || r.frequency}</td>
+                  <td class="px-6 py-4 text-slate-900 font-medium">{r.nextOccurrence}</td>
+                  <td class={`px-6 py-4 text-right font-bold ${r.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {r.type === 'income' ? '+' : '-'}{formatMoney(r.amount, tracker.currency)}
+                  </td>
+                  <td class="px-6 py-4 text-right font-medium text-slate-600">
+                    {formatMoney(calculateAnnualCost(r.amount, r.frequency), tracker.currency)}
+                  </td>
+                  <td class="px-6 py-4 text-right">
+                    <div class="flex justify-end gap-2">
+                      <button
+                        onclick={`openEditModal('${r.id}', '${r.merchant}', '${r.type}', ${r.amount}, '${r.categoryId}', '${r.frequency}', '${r.startDate}', '${r.endDate || ''}', '${r.description || ''}')`}
+                        class="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium transition"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onclick={`toggleRecurring('${r.id}', false)`}
+                        class="px-3 py-1 bg-slate-100 hover:bg-amber-50 hover:text-amber-700 text-slate-700 rounded-lg text-xs font-medium transition"
+                      >
+                        Pause
+                      </button>
+                      <button
+                        onclick={`deleteRecurring('${r.id}', '${r.merchant}')`}
+                        class="px-3 py-1 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-700 rounded-lg text-xs font-medium transition"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )}
+
+    {inactiveRecurring.length > 0 && (
+      <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+        <div class="px-6 py-4 border-b border-slate-200 bg-slate-50">
+          <h2 class="text-lg font-bold text-slate-700">Paused ({inactiveRecurring.length})</h2>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                <th class="px-6 py-3">Merchant</th>
+                <th class="px-6 py-3">Category</th>
+                <th class="px-6 py-3">Frequency</th>
+                <th class="px-6 py-3 text-right">Amount</th>
+                <th class="px-6 py-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-sm">
+              {inactiveRecurring.map((r: any) => (
+                <tr class="hover:bg-slate-50/50 transition">
+                  <td class="px-6 py-4 font-semibold text-slate-900">{r.merchant}</td>
+                  <td class="px-6 py-4">
+                    <span class="px-2.5 py-1 bg-slate-100 text-slate-700 text-xs font-medium rounded-full">{r.categoryName}</span>
+                  </td>
+                  <td class="px-6 py-4 text-slate-600">{frequencyLabels[r.frequency] || r.frequency}</td>
+                  <td class={`px-6 py-4 text-right font-bold ${r.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {r.type === 'income' ? '+' : '-'}{formatMoney(r.amount, tracker.currency)}
+                  </td>
+                  <td class="px-6 py-4 text-right">
+                    <div class="flex justify-end gap-2">
+                      <button
+                        onclick={`toggleRecurring('${r.id}', true)`}
+                        class="px-3 py-1 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 rounded-lg text-xs font-medium transition"
+                      >
+                        Resume
+                      </button>
+                      <button
+                        onclick={`deleteRecurring('${r.id}', '${r.merchant}')`}
+                        class="px-3 py-1 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-700 rounded-lg text-xs font-medium transition"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )}
+
+    {recurring.length === 0 && (
+      <div class="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-500 shadow-sm">
+        <p class="text-base font-medium">No recurring transactions yet.</p>
+        <p class="text-sm mt-1">Add subscriptions, bills, or recurring income to track them automatically.</p>
+      </div>
+    )}
+  </div>
+
+  <div id="recurring-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+      <h2 id="modal-title" class="text-xl font-bold text-slate-900 mb-4">Add Recurring Transaction</h2>
+      <form id="recurring-form" class="space-y-4">
+        <input type="hidden" id="modal-recurring-id" />
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label for="rec-type" class="block text-sm font-medium text-slate-700 mb-1">Type</label>
+            <select name="type" id="rec-type" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+              <option value="expense">Expense</option>
+              <option value="income">Income</option>
+            </select>
+          </div>
+          <div>
+            <label for="rec-amount" class="block text-sm font-medium text-slate-700 mb-1">Amount ({tracker.currency})</label>
+            <input type="number" step="0.01" min="0.01" name="amount" id="rec-amount" required placeholder="0.00" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label for="rec-merchant" class="block text-sm font-medium text-slate-700 mb-1">Merchant</label>
+            <input type="text" name="merchant" id="rec-merchant" required placeholder="e.g. Netflix" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+          </div>
+          <div>
+            <label for="rec-frequency" class="block text-sm font-medium text-slate-700 mb-1">Frequency</label>
+            <select name="frequency" id="rec-frequency" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+              <option value="weekly">Weekly</option>
+              <option value="biweekly">Biweekly</option>
+              <option value="monthly" selected>Monthly</option>
+              <option value="quarterly">Quarterly</option>
+              <option value="yearly">Yearly</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label for="rec-category" class="block text-sm font-medium text-slate-700 mb-1">Category</label>
+          <select name="categoryId" id="rec-category" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            {trackerCategories.map((c: any) => (
+              <option value={c.id} data-type={c.type}>{c.name} ({c.type})</option>
+            ))}
+          </select>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label for="rec-start" class="block text-sm font-medium text-slate-700 mb-1">Start Date</label>
+            <input type="date" name="startDate" id="rec-start" required value={new Date().toISOString().split('T')[0]} class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+          </div>
+          <div>
+            <label for="rec-end" class="block text-sm font-medium text-slate-700 mb-1">End Date (Optional)</label>
+            <input type="date" name="endDate" id="rec-end" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+          </div>
+        </div>
+        <div>
+          <label for="rec-description" class="block text-sm font-medium text-slate-700 mb-1">Description (Optional)</label>
+          <input type="text" name="description" id="rec-description" placeholder="Brief notes" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+        </div>
+        <div id="recurring-error" class="text-sm text-red-600 hidden" role="alert"></div>
+        <div class="flex justify-end gap-3 pt-2">
+          <button type="button" id="close-recurring-modal" class="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-medium">Cancel</button>
+          <button type="submit" id="submit-btn" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium">Save Recurring</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script define:vars={{ trackerId }}>
+    const modal = document.getElementById('recurring-modal');
+    const openBtn = document.getElementById('add-recurring-btn');
+    const closeBtn = document.getElementById('close-recurring-modal');
+    const form = document.getElementById('recurring-form');
+    const errorDiv = document.getElementById('recurring-error');
+    const modalTitle = document.getElementById('modal-title');
+    const modalRecurringId = document.getElementById('modal-recurring-id');
+    const submitBtn = document.getElementById('submit-btn');
+    const typeSelect = document.getElementById('rec-type');
+    const categorySelect = document.getElementById('rec-category');
+
+    let isEditing = false;
+
+    typeSelect?.addEventListener('change', () => {
+      const selectedType = typeSelect.value;
+      Array.from(categorySelect.options).forEach((opt) => {
+        const type = opt.getAttribute('data-type');
+        if (type === selectedType) {
+          opt.hidden = false;
+        } else {
+          opt.hidden = true;
+        }
+      });
+      const firstVisible = Array.from(categorySelect.options).find(opt => !opt.hidden);
+      if (firstVisible) categorySelect.value = firstVisible.value;
+    });
+    typeSelect?.dispatchEvent(new Event('change'));
+
+    openBtn?.addEventListener('click', () => {
+      isEditing = false;
+      if (modalTitle) modalTitle.textContent = 'Add Recurring Transaction';
+      if (submitBtn) submitBtn.textContent = 'Save Recurring';
+      if (modalRecurringId) modalRecurringId.value = '';
+      form?.reset();
+      typeSelect?.dispatchEvent(new Event('change'));
+      modal?.classList.remove('hidden');
+      modal?.classList.add('flex');
+    });
+
+    closeBtn?.addEventListener('click', () => {
+      modal?.classList.add('hidden');
+      modal?.classList.remove('flex');
+    });
+
+    window.openEditModal = (id, merchant, type, amount, categoryId, frequency, startDate, endDate, description) => {
+      isEditing = true;
+      if (modalTitle) modalTitle.textContent = 'Edit Recurring Transaction';
+      if (submitBtn) submitBtn.textContent = 'Update Recurring';
+      if (modalRecurringId) modalRecurringId.value = id;
+      
+      const merchantInput = document.getElementById('rec-merchant');
+      const amountInput = document.getElementById('rec-amount');
+      const frequencySelect = document.getElementById('rec-frequency');
+      const startInput = document.getElementById('rec-start');
+      const endInput = document.getElementById('rec-end');
+      const descInput = document.getElementById('rec-description');
+      
+      if (merchantInput) merchantInput.value = merchant;
+      if (amountInput) amountInput.value = amount / 100;
+      if (typeSelect) typeSelect.value = type;
+      if (categorySelect) categorySelect.value = categoryId;
+      if (frequencySelect) frequencySelect.value = frequency;
+      if (startInput) startInput.value = startDate;
+      if (endInput) endInput.value = endDate;
+      if (descInput) descInput.value = description;
+      
+      typeSelect?.dispatchEvent(new Event('change'));
+      modal?.classList.remove('hidden');
+      modal?.classList.add('flex');
+    };
+
+    form?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (errorDiv) errorDiv.classList.add('hidden');
+      const formData = new FormData(form);
+      const rawAmount = parseFloat(formData.get('amount') || '0');
+      const amountCents = Math.round(rawAmount * 100);
+
+      const payload = {
+        trackerId,
+        merchant: formData.get('merchant'),
+        type: formData.get('type'),
+        amount: amountCents,
+        categoryId: formData.get('categoryId'),
+        frequency: formData.get('frequency'),
+        startDate: formData.get('startDate'),
+        endDate: formData.get('endDate') || null,
+        description: formData.get('description') || null,
+      };
+
+      const action = isEditing ? 'recurring.update' : 'recurring.create';
+      if (isEditing) {
+        payload.id = modalRecurringId.value;
+      }
+
+      try {
+        const res = await fetch('/api/rpc', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action, payload }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          window.location.reload();
+        } else {
+          if (errorDiv) {
+            errorDiv.textContent = data.error.message;
+            errorDiv.classList.remove('hidden');
+          }
+        }
+      } catch (err) {
+        if (errorDiv) {
+          errorDiv.textContent = 'Failed to save recurring transaction';
+          errorDiv.classList.remove('hidden');
+        }
+      }
+    });
+
+    window.toggleRecurring = async (id, active) => {
+      try {
+        const res = await fetch('/api/rpc', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'recurring.toggle', payload: { id, trackerId, active } }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          window.location.reload();
+        } else {
+          alert(data.error.message || 'Failed to update recurring transaction');
+        }
+      } catch (err) {
+        alert('Failed to update recurring transaction');
+      }
+    };
+
+    window.deleteRecurring = async (id, merchant) => {
+      if (!confirm(`Are you sure you want to delete "${merchant}"? This cannot be undone.`)) return;
+      try {
+        const res = await fetch('/api/rpc', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'recurring.delete', payload: { id, trackerId } }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          window.location.reload();
+        } else {
+          alert(data.error.message || 'Failed to delete recurring transaction');
+        }
+      } catch (err) {
+        alert('Failed to delete recurring transaction');
+      }
+    };
+  </script>
+</Layout>

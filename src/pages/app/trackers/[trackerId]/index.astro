@@ -1,0 +1,356 @@
+---
+import Layout from '../../../../layouts/Layout.astro';
+import { trackers, categories, transactions, trackerMembers } from '../../../../db/schema';
+import { eq, and, desc, gte, lte } from 'drizzle-orm';
+import { requireTrackerAccess } from '../../../../lib/auth-guards';
+import { formatMoney } from '../../../../lib/money';
+
+const { trackerId } = Astro.params;
+const user = Astro.locals.user!;
+const db = Astro.locals.db;
+
+const member = await requireTrackerAccess(db, user.id, trackerId!).catch(() => null);
+if (!member) {
+  return Astro.redirect('/app/trackers');
+}
+
+const [tracker] = await db.select().from(trackers).where(eq(trackers.id, trackerId!)).limit(1);
+if (!tracker) {
+  return Astro.redirect('/app/trackers');
+}
+
+const url = new URL(Astro.request.url);
+const now = new Date();
+const year = parseInt(url.searchParams.get('year') || String(now.getFullYear()));
+const month = parseInt(url.searchParams.get('month') || String(now.getMonth() + 1));
+
+const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+const lastDay = new Date(year, month, 0).getDate();
+const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+const trackerCategories = await db
+  .select()
+  .from(categories)
+  .where(eq(categories.trackerId, trackerId!));
+
+const monthTransactions = await db
+  .select({
+    id: transactions.id,
+    type: transactions.type,
+    amount: transactions.amount,
+    transactionDate: transactions.transactionDate,
+    merchant: transactions.merchant,
+    description: transactions.description,
+    categoryId: transactions.categoryId,
+    categoryName: categories.name,
+    paymentMethod: transactions.paymentMethod,
+  })
+  .from(transactions)
+  .innerJoin(categories, eq(transactions.categoryId, categories.id))
+  .where(
+    and(
+      eq(transactions.trackerId, trackerId!),
+      gte(transactions.transactionDate, startDate),
+      lte(transactions.transactionDate, endDate)
+    )
+  )
+  .orderBy(desc(transactions.transactionDate));
+
+let totalIncome = 0;
+let totalExpenses = 0;
+
+for (const tx of monthTransactions) {
+  if (tx.type === 'income') {
+    totalIncome += tx.amount;
+  } else if (tx.type === 'expense') {
+    totalExpenses += tx.amount;
+  }
+}
+
+const netIncome = totalIncome - totalExpenses;
+const savingsRate = totalIncome > 0 ? Math.max(0, netIncome / totalIncome) : 0;
+---
+<Layout title={tracker.name}>
+  <div class="space-y-8">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+      <div>
+        <div class="flex items-center gap-3">
+          <h1 class="text-2xl font-bold text-slate-900">{tracker.name}</h1>
+          <span class="text-xs uppercase px-2.5 py-1 bg-indigo-50 text-indigo-700 font-semibold rounded-full">{member.role}</span>
+        </div>
+        <p class="text-slate-600 text-sm mt-1">{tracker.description || 'Financial workspace'}</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <a href={`/app/trackers/${trackerId}/transactions`} class="px-4 py-2 border border-slate-300 text-slate-700 font-medium rounded-xl hover:bg-slate-50 transition text-sm">
+          💳 Transactions
+        </a>
+        <a href={`/app/trackers/${trackerId}/collaborate`} class="px-4 py-2 border border-slate-300 text-slate-700 font-medium rounded-xl hover:bg-slate-50 transition text-sm">
+          👥 Collaborate
+        </a>
+        <a href={`/app/trackers/${trackerId}/categories`} class="px-4 py-2 border border-slate-300 text-slate-700 font-medium rounded-xl hover:bg-slate-50 transition text-sm">
+          🏷️ Categories
+        </a>
+        <a href={`/app/trackers/${trackerId}/recurring`} class="px-4 py-2 border border-slate-300 text-slate-700 font-medium rounded-xl hover:bg-slate-50 transition text-sm">
+          🔄 Recurring
+        </a>
+        <a href={`/app/trackers/${trackerId}/budget?year=${year}&month=${month}`} class="px-4 py-2 border border-slate-300 text-slate-700 font-medium rounded-xl hover:bg-slate-50 transition text-sm">
+          📊 Budgets
+        </a>
+        <div class="relative group">
+          <button class="px-4 py-2 border border-slate-300 text-slate-700 font-medium rounded-xl hover:bg-slate-50 transition text-sm">
+            📈 Reports ▾
+          </button>
+          <div class="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-2 hidden group-hover:block z-10">
+            <a href={`/app/trackers/${trackerId}/reports/monthly?year=${year}&month=${month}`} class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">Monthly Report</a>
+            <a href={`/app/trackers/${trackerId}/reports/quarterly?year=${year}&quarter=${Math.floor((month - 1) / 3) + 1}`} class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">Quarterly Report</a>
+            <a href={`/app/trackers/${trackerId}/reports/yearly?year=${year}`} class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">Yearly Report</a>
+          </div>
+        </div>
+        <button id="open-tx-modal" class="bg-indigo-600 text-white font-medium px-4 py-2 rounded-xl hover:bg-indigo-700 transition text-sm shadow-sm">
+          + Add Transaction
+        </button>
+      </div>
+    </div>
+
+    <div class="flex items-center justify-between bg-white px-6 py-4 rounded-xl border border-slate-200">
+      <div class="flex items-center gap-2">
+        <span class="text-sm font-medium text-slate-700">Period:</span>
+        <select id="month-select" class="px-3 py-1.5 border border-slate-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+            <option value={m} selected={m === month}>
+              {new Date(0, m - 1).toLocaleString('default', { month: 'long' })}
+            </option>
+          ))}
+        </select>
+        <select id="year-select" class="px-3 py-1.5 border border-slate-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          {[2024, 2025, 2026, 2027].map((y) => (
+            <option value={y} selected={y === year}>{y}</option>
+          ))}
+        </select>
+      </div>
+      <div class="text-sm text-slate-500">
+        Currency: <span class="font-semibold text-slate-700">{tracker.currency}</span>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" role="group" aria-label="Financial summary">
+      <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm" role="region" aria-label="Total Income">
+        <p class="text-sm font-medium text-slate-500">Total Income</p>
+        <p class="text-2xl font-extrabold text-emerald-600 mt-2" aria-live="polite">{formatMoney(totalIncome, tracker.currency)}</p>
+      </div>
+      <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm" role="region" aria-label="Total Expenses">
+        <p class="text-sm font-medium text-slate-500">Total Expenses</p>
+        <p class="text-2xl font-extrabold text-rose-600 mt-2" aria-live="polite">{formatMoney(totalExpenses, tracker.currency)}</p>
+      </div>
+      <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm" role="region" aria-label="Net Income">
+        <p class="text-sm font-medium text-slate-500">Net Income</p>
+        <p class={`text-2xl font-extrabold mt-2 ${netIncome >= 0 ? 'text-indigo-600' : 'text-rose-600'}`} aria-live="polite">
+          {formatMoney(netIncome, tracker.currency)}
+        </p>
+      </div>
+      <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm" role="region" aria-label="Savings Rate">
+        <p class="text-sm font-medium text-slate-500">Savings Rate</p>
+        <p class="text-2xl font-extrabold text-slate-900 mt-2" aria-live="polite">{(savingsRate * 100).toFixed(1)}%</p>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+      <div class="px-6 py-4 border-b border-slate-200 flex justify-between items-center">
+        <h2 class="text-lg font-bold text-slate-900">Recent Transactions</h2>
+        <span class="text-sm text-slate-500">{monthTransactions.length} recorded this month</span>
+      </div>
+      {monthTransactions.length === 0 ? (
+        <div class="p-12 text-center text-slate-500">
+          <p class="text-base font-medium">No transactions recorded for this month.</p>
+          <p class="text-sm mt-1">Click "+ Add Transaction" to get started.</p>
+        </div>
+      ) : (
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse" aria-label="Recent transactions">
+            <thead>
+              <tr class="bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                <th scope="col" class="px-6 py-3">Date</th>
+                <th scope="col" class="px-6 py-3">Merchant</th>
+                <th scope="col" class="px-6 py-3">Category</th>
+                <th scope="col" class="px-6 py-3">Type</th>
+                <th scope="col" class="px-6 py-3 text-right">Amount</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-sm">
+              {monthTransactions.map((tx: any) => (
+                <tr class="hover:bg-slate-50/50 transition">
+                  <td class="px-6 py-4 text-slate-600 font-medium">{tx.transactionDate}</td>
+                  <td class="px-6 py-4 text-slate-900 font-semibold">{tx.merchant}</td>
+                  <td class="px-6 py-4">
+                    <span class="px-2.5 py-1 bg-slate-100 text-slate-700 text-xs font-medium rounded-full">{tx.categoryName}</span>
+                  </td>
+                  <td class="px-6 py-4">
+                    <span class={`px-2 py-0.5 text-xs font-bold uppercase rounded-full ${tx.type === 'income' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                      {tx.type}
+                    </span>
+                  </td>
+                  <td class={`px-6 py-4 text-right font-bold ${tx.type === 'income' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {tx.type === 'income' ? '+' : '-'}{formatMoney(tx.amount, tracker.currency)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  </div>
+
+  <div id="tx-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+      <h2 class="text-xl font-bold text-slate-900 mb-4">Add Transaction</h2>
+      <form id="tx-form" class="space-y-4">
+        <input type="hidden" name="trackerId" value={trackerId} />
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Type</label>
+            <select name="type" id="tx-type" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+              <option value="expense">Expense</option>
+              <option value="income">Income</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Amount ({tracker.currency})</label>
+            <input type="number" step="0.01" min="0.01" name="amount" required placeholder="0.00" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Date</label>
+            <input type="date" name="transactionDate" required value={new Date().toISOString().split('T')[0]} class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Merchant</label>
+            <input type="text" name="merchant" required placeholder="e.g. Whole Foods" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Category</label>
+          <select name="categoryId" id="category-select" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            {trackerCategories.map((c: any) => (
+              <option value={c.id} data-type={c.type}>{c.name} ({c.type})</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1">Description (Optional)</label>
+          <input type="text" name="description" placeholder="Brief details" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+        </div>
+        <div id="tx-modal-error" class="text-sm text-red-600 hidden"></div>
+        <div class="flex justify-end gap-3 pt-2">
+          <button type="button" id="close-tx-modal" class="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-medium">Cancel</button>
+          <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium">Save Transaction</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script define:vars={{ trackerId, year, month }}>
+    const modal = document.getElementById('tx-modal');
+    const openBtn = document.getElementById('open-tx-modal');
+    const closeBtn = document.getElementById('close-tx-modal');
+    const form = document.getElementById('tx-form');
+    const errorDiv = document.getElementById('tx-modal-error');
+    const typeSelect = document.getElementById('tx-type');
+    const categorySelect = document.getElementById('category-select');
+
+    openBtn?.addEventListener('click', () => {
+      modal?.classList.remove('hidden');
+      modal?.classList.add('flex');
+    });
+    closeBtn?.addEventListener('click', () => {
+      modal?.classList.add('hidden');
+      modal?.classList.remove('flex');
+    });
+
+    typeSelect?.addEventListener('change', () => {
+      const selectedType = typeSelect.value;
+      Array.from(categorySelect.options).forEach((opt) => {
+        const type = opt.getAttribute('data-type');
+        if (type === selectedType) {
+          opt.hidden = false;
+          if (categorySelect.value !== opt.value && !categorySelect.selectedOptions.length) {
+            categorySelect.value = opt.value;
+          }
+        } else {
+          opt.hidden = true;
+        }
+      });
+      const firstVisible = Array.from(categorySelect.options).find(opt => !opt.hidden);
+      if (firstVisible) categorySelect.value = firstVisible.value;
+    });
+    typeSelect?.dispatchEvent(new Event('change'));
+
+    const monthSelect = document.getElementById('month-select');
+    const yearSelect = document.getElementById('year-select');
+
+    function updatePeriod() {
+      const m = monthSelect.value;
+      const y = yearSelect.value;
+      window.location.href = `/app/trackers/${trackerId}?year=${y}&month=${m}`;
+    }
+
+    monthSelect?.addEventListener('change', updatePeriod);
+    yearSelect?.addEventListener('change', updatePeriod);
+
+    form?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (errorDiv) errorDiv.classList.add('hidden');
+      const formData = new FormData(form);
+      const rawAmount = parseFloat(formData.get('amount') || '0');
+      const amountCents = Math.round(rawAmount * 100);
+
+      const payload = {
+        trackerId,
+        type: formData.get('type'),
+        amount: amountCents,
+        currency: 'USD',
+        transactionDate: formData.get('transactionDate'),
+        merchant: formData.get('merchant'),
+        description: formData.get('description'),
+        categoryId: formData.get('categoryId'),
+      };
+
+      try {
+        const res = await fetch('/api/rpc', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'transaction.create', payload }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          window.location.reload();
+        } else {
+          if (errorDiv) {
+            errorDiv.textContent = data.error.message;
+            errorDiv.classList.remove('hidden');
+          }
+        }
+      } catch (err) {
+        if (errorDiv) {
+          errorDiv.textContent = 'Failed to create transaction';
+          errorDiv.classList.remove('hidden');
+        }
+      }
+    });
+
+    if (typeof gsap !== 'undefined') {
+      gsap.from('.grid > div', {
+        y: 20,
+        opacity: 0,
+        duration: 0.5,
+        stagger: 0.1,
+        ease: 'power2.out',
+      });
+    }
+  </script>
+  <script>
+    import gsap from 'gsap';
+    (window as any).gsap = gsap;
+  </script>
+</Layout>
