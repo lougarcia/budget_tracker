@@ -67,6 +67,7 @@ const userTrackers = await db
             <option value="GBP">GBP (£)</option>
             <option value="CAD">CAD ($)</option>
             <option value="AUD">AUD ($)</option>
+            <option value="PHP">PHP (₱)</option>
           </select>
         </div>
         <div id="modal-error" class="text-sm text-red-600 hidden"></div>
@@ -131,6 +132,5 @@ const userTrackers = await db
     }
 
     document.addEventListener('astro:page-load', setupTrackers);
-    setupTrackers();
   </script>
 </Layout>
