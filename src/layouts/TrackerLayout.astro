@@ -312,26 +312,18 @@ const isActive = (path: string) => currentPath === path;
         }
 
         if (typeSelect && categorySelect) {
-          const categories = Array.from(categorySelect.options).map(opt => ({
-            value: opt.value,
-            text: opt.text,
-            type: opt.getAttribute('data-type'),
-          }));
+          const allOptions = Array.from(categorySelect.options);
 
           const merchantLabel = document.getElementById('merchant-label');
           const merchantInput = document.getElementById('sidebar-merchant');
 
           function filterCategories() {
             const selectedType = typeSelect.value;
-            categorySelect.innerHTML = '';
-            categories.forEach(cat => {
-              if (cat.type === selectedType) {
-                const opt = document.createElement('option');
-                opt.value = cat.value;
-                opt.text = cat.text;
-                categorySelect.appendChild(opt);
-              }
+            allOptions.forEach(opt => {
+              opt.hidden = opt.getAttribute('data-type') !== selectedType;
             });
+            const firstVisible = allOptions.find(opt => !opt.hidden);
+            if (firstVisible) categorySelect.value = firstVisible.value;
 
             if (merchantLabel && merchantInput) {
               if (selectedType === 'income') {
