@@ -1,5 +1,5 @@
 ---
-import Layout from '../../../../../layouts/Layout.astro';
+import TrackerLayout from '../../../../../layouts/TrackerLayout.astro';
 import { trackers, categories, transactions } from '../../../../../db/schema';
 import { eq, and, gte, lte, sql, desc } from 'drizzle-orm';
 import { requireTrackerAccess } from '../../../../../lib/auth-guards';
@@ -93,13 +93,11 @@ const topPurchases = [...yearTransactions]
 
 const maxMonthlyExpense = Math.max(...monthlyBreakdown.map(m => m.expenses));
 ---
-<Layout title={`Yearly Report — ${tracker.name}`}>
+<TrackerLayout title={`Yearly Report — ${tracker.name}`} trackerId={trackerId!} trackerName={tracker.name} trackerRole={member.role} trackerDescription={tracker.description} currentPath="reports/yearly" year={year}>
   <div class="space-y-8">
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
       <div>
         <div class="flex items-center gap-3">
-          <a href={`/app/trackers/${trackerId}`} class="text-sm font-medium text-indigo-600 hover:underline">← Back to Dashboard</a>
-          <span class="text-slate-300">/</span>
           <h1 class="text-2xl font-bold text-slate-900">Yearly Financial Report</h1>
         </div>
         <p class="text-slate-600 text-sm mt-1">{year} — {startDate} to {endDate}</p>
@@ -233,4 +231,4 @@ const maxMonthlyExpense = Math.max(...monthlyBreakdown.map(m => m.expenses));
     document.addEventListener('astro:page-load', setupYearlyReport);
     setupYearlyReport();
   </script>
-</Layout>
+</TrackerLayout>

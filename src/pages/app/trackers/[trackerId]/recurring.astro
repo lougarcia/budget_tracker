@@ -1,5 +1,5 @@
 ---
-import Layout from '../../../../layouts/Layout.astro';
+import TrackerLayout from '../../../../layouts/TrackerLayout.astro';
 import { trackers, categories, recurringTransactions } from '../../../../db/schema';
 import { eq, and, asc } from 'drizzle-orm';
 import { requireTrackerAccess } from '../../../../lib/auth-guards';
@@ -23,6 +23,8 @@ const trackerCategories = await db
   .select()
   .from(categories)
   .where(eq(categories.trackerId, trackerId!));
+
+const categoryOptions = trackerCategories.map((c) => ({ id: c.id, name: c.name, type: c.type }));
 
 const recurring = await db
   .select({
@@ -69,13 +71,11 @@ function calculateAnnualCost(amount: number, frequency: string): number {
 
 const totalAnnualCost = activeRecurring.reduce((sum: number, r: any) => sum + calculateAnnualCost(r.amount, r.frequency), 0);
 ---
-<Layout title={`Recurring Transactions — ${tracker.name}`}>
+<TrackerLayout title={`Recurring Transactions — ${tracker.name}`} trackerId={trackerId!} trackerName={tracker.name} trackerRole={member.role} trackerDescription={tracker.description} currentPath="recurring" categories={categoryOptions}>
   <div class="space-y-8">
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
       <div>
         <div class="flex items-center gap-3">
-          <a href={`/app/trackers/${trackerId}`} class="text-sm font-medium text-indigo-600 hover:underline">← Back to Dashboard</a>
-          <span class="text-slate-300">/</span>
           <h1 class="text-2xl font-bold text-slate-900">Recurring Transactions</h1>
         </div>
         <p class="text-slate-600 text-sm mt-1">Manage your subscriptions and recurring bills</p>
@@ -455,4 +455,4 @@ const totalAnnualCost = activeRecurring.reduce((sum: number, r: any) => sum + ca
     document.addEventListener('astro:page-load', setupRecurring);
     setupRecurring();
   </script>
-</Layout>
+</TrackerLayout>

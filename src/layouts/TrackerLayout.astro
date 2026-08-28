@@ -1,0 +1,399 @@
+---
+import '../styles/global.css';
+import { ViewTransitions } from 'astro:transitions';
+
+interface Props {
+  title: string;
+  trackerId: string;
+  trackerName: string;
+  trackerRole: string;
+  trackerDescription?: string | null;
+  currentPath: string;
+  year?: number;
+  month?: number;
+  quarter?: number;
+  categories?: Array<{ id: string; name: string; type: string }>;
+}
+
+const { title, trackerId, trackerName, trackerRole, trackerDescription, currentPath, year, month, quarter, categories = [] } = Astro.props;
+const user = Astro.locals.user;
+
+const currentMonth = month || new Date().getMonth() + 1;
+const currentYear = year || new Date().getFullYear();
+const currentQuarter = quarter || Math.floor((currentMonth - 1) / 3) + 1;
+
+const isActive = (path: string) => currentPath === path;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title} — Budget Tracker</title>
+    <ViewTransitions />
+  </head>
+  <body class="min-h-screen bg-slate-50 text-slate-900">
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-indigo-600 text-white px-4 py-2 rounded-lg z-50">
+      Skip to main content
+    </a>
+
+    <div class="flex min-h-screen">
+      <aside class="w-64 bg-white border-r border-slate-200 flex flex-col fixed h-full z-40" role="navigation" aria-label="Tracker navigation">
+        <div class="p-4 border-b border-slate-200">
+          <a href="/app/trackers" class="text-lg font-bold text-indigo-600 flex items-center gap-2 hover:text-indigo-700 transition" aria-label="BudgetTracker Home">
+            <span aria-hidden="true">💰</span> BudgetTracker
+          </a>
+        </div>
+
+        <div class="p-4 border-b border-slate-200">
+          <h2 class="text-sm font-bold text-slate-900 truncate">{trackerName}</h2>
+          <div class="flex items-center gap-2 mt-1">
+            <span class="text-xs uppercase px-2 py-0.5 bg-indigo-50 text-indigo-700 font-semibold rounded-full">{trackerRole}</span>
+          </div>
+          {trackerDescription && (
+            <p class="text-xs text-slate-500 mt-2 line-clamp-2">{trackerDescription}</p>
+          )}
+        </div>
+
+        <nav class="flex-1 p-3 space-y-1 overflow-y-auto" aria-label="Tracker pages">
+          <a
+            href={`/app/trackers/${trackerId}`}
+            class={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
+              isActive('dashboard')
+                ? 'bg-indigo-50 text-indigo-700'
+                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+            }`}
+          >
+            <span class="text-lg" aria-hidden="true">📊</span>
+            Dashboard
+          </a>
+          <a
+            href={`/app/trackers/${trackerId}/transactions`}
+            class={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
+              isActive('transactions')
+                ? 'bg-indigo-50 text-indigo-700'
+                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+            }`}
+          >
+            <span class="text-lg" aria-hidden="true">💳</span>
+            Transactions
+          </a>
+          <a
+            href={`/app/trackers/${trackerId}/budget?year=${currentYear}&month=${currentMonth}`}
+            class={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
+              isActive('budget')
+                ? 'bg-indigo-50 text-indigo-700'
+                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+            }`}
+          >
+            <span class="text-lg" aria-hidden="true">💰</span>
+            Budgets
+          </a>
+          <a
+            href={`/app/trackers/${trackerId}/categories`}
+            class={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
+              isActive('categories')
+                ? 'bg-indigo-50 text-indigo-700'
+                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+            }`}
+          >
+            <span class="text-lg" aria-hidden="true">🏷️</span>
+            Categories
+          </a>
+          <a
+            href={`/app/trackers/${trackerId}/recurring`}
+            class={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
+              isActive('recurring')
+                ? 'bg-indigo-50 text-indigo-700'
+                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+            }`}
+          >
+            <span class="text-lg" aria-hidden="true">🔄</span>
+            Recurring
+          </a>
+          <a
+            href={`/app/trackers/${trackerId}/collaborate`}
+            class={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
+              isActive('collaborate')
+                ? 'bg-indigo-50 text-indigo-700'
+                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+            }`}
+          >
+            <span class="text-lg" aria-hidden="true">👥</span>
+            Collaborate
+          </a>
+
+          <div class="pt-2">
+            <button
+              id="reports-toggle"
+              class={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition ${
+                isActive('reports')
+                  ? 'bg-indigo-50 text-indigo-700'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+              }`}
+              aria-expanded="false"
+              aria-controls="reports-submenu"
+            >
+              <span class="flex items-center gap-3">
+                <span class="text-lg" aria-hidden="true">📈</span>
+                Reports
+              </span>
+              <svg id="reports-chevron" class="w-4 h-4 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+            <div id="reports-submenu" class="hidden pl-6 mt-1 space-y-1">
+              <a
+                href={`/app/trackers/${trackerId}/reports/monthly?year=${currentYear}&month=${currentMonth}`}
+                class={`block px-3 py-2 rounded-lg text-sm transition ${
+                  isActive('reports/monthly')
+                    ? 'bg-indigo-50 text-indigo-700 font-medium'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+              >
+                Monthly
+              </a>
+              <a
+                href={`/app/trackers/${trackerId}/reports/quarterly?year=${currentYear}&quarter=${currentQuarter}`}
+                class={`block px-3 py-2 rounded-lg text-sm transition ${
+                  isActive('reports/quarterly')
+                    ? 'bg-indigo-50 text-indigo-700 font-medium'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+              >
+                Quarterly
+              </a>
+              <a
+                href={`/app/trackers/${trackerId}/reports/yearly?year=${currentYear}`}
+                class={`block px-3 py-2 rounded-lg text-sm transition ${
+                  isActive('reports/yearly')
+                    ? 'bg-indigo-50 text-indigo-700 font-medium'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+              >
+                Yearly
+              </a>
+            </div>
+          </div>
+        </nav>
+
+        <div class="p-3 border-t border-slate-200">
+          <button id="sidebar-add-tx" class="w-full bg-indigo-600 text-white font-medium px-4 py-2.5 rounded-lg hover:bg-indigo-700 transition text-sm shadow-sm">
+            + Add Transaction
+          </button>
+        </div>
+      </aside>
+
+      <div class="flex-1 ml-64">
+        <header class="bg-white border-b border-slate-200 sticky top-0 z-30" role="banner">
+          <div class="max-w-full mx-auto px-6 h-14 flex items-center justify-between">
+            <div></div>
+            <nav class="flex items-center gap-4" aria-label="User menu">
+              {user ? (
+                <div class="flex items-center gap-4">
+                  <span class="text-sm text-slate-600 font-medium">{user.name || user.email}</span>
+                  <a href="/app/settings" class="text-sm text-slate-500 hover:text-slate-700" aria-label="Settings">Settings</a>
+                  <a href="/login" id="logout-btn" class="text-sm text-slate-500 hover:text-slate-700" aria-label="Logout">Logout</a>
+                </div>
+              ) : (
+                <div class="flex items-center gap-3">
+                  <a href="/login" class="text-sm font-medium text-slate-600 hover:text-slate-900">Login</a>
+                  <a href="/register" class="text-sm font-medium bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition">Register</a>
+                </div>
+              )}
+            </nav>
+          </div>
+        </header>
+
+        <main id="main-content" class="p-6" role="main">
+          <slot />
+        </main>
+      </div>
+    </div>
+
+    <div id="add-tx-modal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-4 z-50">
+      <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+        <h2 class="text-xl font-bold text-slate-900 mb-4">Add Transaction</h2>
+        <form id="sidebar-tx-form" class="space-y-4">
+          <input type="hidden" name="trackerId" value={trackerId} />
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Type</label>
+              <select name="type" id="sidebar-tx-type" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                <option value="expense">Expense</option>
+                <option value="income">Income</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-1">Amount</label>
+              <input type="number" name="amount" step="0.01" min="0.01" required placeholder="0.00" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Category</label>
+            <select name="categoryId" id="sidebar-category-select" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+              {categories.map((cat) => (
+                <option value={cat.id} data-type={cat.type}>{cat.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Merchant</label>
+            <input type="text" name="merchant" required placeholder="e.g. Amazon" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Date</label>
+            <input type="date" name="transactionDate" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-700 mb-1">Description (optional)</label>
+            <input type="text" name="description" placeholder="Brief description" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+          </div>
+          <div id="sidebar-tx-error" class="text-sm text-red-600 hidden"></div>
+          <div class="flex justify-end gap-3 pt-2">
+            <button type="button" id="close-sidebar-tx-modal" class="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-medium">Cancel</button>
+            <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium">Save Transaction</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script is:inline define:vars={{ trackerId }}>
+      function setupTrackerLayout() {
+        const reportsToggle = document.getElementById('reports-toggle');
+        const reportsSubmenu = document.getElementById('reports-submenu');
+        const reportsChevron = document.getElementById('reports-chevron');
+        const storageKey = 'reports-submenu-open';
+
+        if (reportsToggle && reportsSubmenu && reportsChevron) {
+          const savedState = localStorage.getItem(storageKey);
+          if (savedState === 'true') {
+            reportsSubmenu.classList.remove('hidden');
+            reportsChevron.style.transform = 'rotate(90deg)';
+            reportsToggle.setAttribute('aria-expanded', 'true');
+          }
+
+          reportsToggle.addEventListener('click', () => {
+            const isOpen = !reportsSubmenu.classList.contains('hidden');
+            if (isOpen) {
+              reportsSubmenu.classList.add('hidden');
+              reportsChevron.style.transform = 'rotate(0deg)';
+              reportsToggle.setAttribute('aria-expanded', 'false');
+              localStorage.setItem(storageKey, 'false');
+            } else {
+              reportsSubmenu.classList.remove('hidden');
+              reportsChevron.style.transform = 'rotate(90deg)';
+              reportsToggle.setAttribute('aria-expanded', 'true');
+              localStorage.setItem(storageKey, 'true');
+            }
+          });
+        }
+
+        const openModalBtn = document.getElementById('sidebar-add-tx');
+        const modal = document.getElementById('add-tx-modal');
+        const closeModalBtn = document.getElementById('close-sidebar-tx-modal');
+        const form = document.getElementById('sidebar-tx-form');
+        const errorDiv = document.getElementById('sidebar-tx-error');
+        const typeSelect = document.getElementById('sidebar-tx-type');
+        const categorySelect = document.getElementById('sidebar-category-select');
+
+        if (openModalBtn && modal) {
+          openModalBtn.addEventListener('click', () => {
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+          });
+        }
+
+        if (closeModalBtn && modal) {
+          closeModalBtn.addEventListener('click', () => {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+          });
+        }
+
+        if (typeSelect && categorySelect) {
+          const categories = Array.from(categorySelect.options).map(opt => ({
+            value: opt.value,
+            text: opt.text,
+            type: opt.getAttribute('data-type'),
+          }));
+
+          function filterCategories() {
+            const selectedType = typeSelect.value;
+            categorySelect.innerHTML = '';
+            categories.forEach(cat => {
+              if (cat.type === selectedType) {
+                const opt = document.createElement('option');
+                opt.value = cat.value;
+                opt.text = cat.text;
+                categorySelect.appendChild(opt);
+              }
+            });
+          }
+
+          typeSelect.addEventListener('change', filterCategories);
+          filterCategories();
+        }
+
+        if (form) {
+          form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (errorDiv) errorDiv.classList.add('hidden');
+            const formData = new FormData(form);
+            const rawAmount = parseFloat(formData.get('amount') || '0');
+            const amountCents = Math.round(rawAmount * 100);
+
+            const payload = {
+              trackerId,
+              type: formData.get('type'),
+              amount: amountCents,
+              currency: 'USD',
+              transactionDate: formData.get('transactionDate'),
+              merchant: formData.get('merchant'),
+              description: formData.get('description'),
+              categoryId: formData.get('categoryId'),
+            };
+
+            try {
+              const res = await fetch('/api/rpc', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'transaction.create', payload }),
+              });
+              const data = await res.json();
+              if (data.success) {
+                window.location.reload();
+              } else {
+                if (errorDiv) {
+                  errorDiv.textContent = data.error.message;
+                  errorDiv.classList.remove('hidden');
+                }
+              }
+            } catch (err) {
+              if (errorDiv) {
+                errorDiv.textContent = 'Failed to create transaction';
+                errorDiv.classList.remove('hidden');
+              }
+            }
+          });
+        }
+
+        const logoutBtn = document.getElementById('logout-btn');
+        if (logoutBtn) {
+          logoutBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            try {
+              await fetch('/api/auth/sign-out', { method: 'POST' });
+              window.location.href = '/login';
+            } catch (err) {
+              console.error('Logout failed', err);
+            }
+          });
+        }
+      }
+
+      document.addEventListener('astro:page-load', setupTrackerLayout);
+      setupTrackerLayout();
+    </script>
+  </body>
+</html>
