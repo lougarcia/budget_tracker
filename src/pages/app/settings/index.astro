@@ -2,6 +2,7 @@
 import Layout from '../../../layouts/Layout.astro';
 import { userPreferences } from '../../../db/schema';
 import { eq } from 'drizzle-orm';
+import { currencies, formatCurrencyOption } from '../../../lib/currencies';
 
 const db = Astro.locals.db;
 const user = Astro.locals.user!;
@@ -96,17 +97,9 @@ const defaultCurrency = preferences?.defaultCurrency || 'USD';
             name="defaultCurrency"
             class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
           >
-            <option value="USD" selected={defaultCurrency === 'USD'}>USD ($)</option>
-            <option value="EUR" selected={defaultCurrency === 'EUR'}>EUR (€)</option>
-            <option value="GBP" selected={defaultCurrency === 'GBP'}>GBP (£)</option>
-            <option value="CAD" selected={defaultCurrency === 'CAD'}>CAD ($)</option>
-            <option value="AUD" selected={defaultCurrency === 'AUD'}>AUD ($)</option>
-            <option value="JPY" selected={defaultCurrency === 'JPY'}>JPY (¥)</option>
-            <option value="CHF" selected={defaultCurrency === 'CHF'}>CHF (Fr)</option>
-            <option value="CNY" selected={defaultCurrency === 'CNY'}>CNY (¥)</option>
-            <option value="INR" selected={defaultCurrency === 'INR'}>INR (₹)</option>
-            <option value="MXN" selected={defaultCurrency === 'MXN'}>MXN ($)</option>
-            <option value="PHP" selected={defaultCurrency === 'PHP'}>PHP (₱)</option>
+            {currencies.map((c) => (
+              <option value={c.code} selected={defaultCurrency === c.code}>{formatCurrencyOption(c)}</option>
+            ))}
           </select>
           <p class="text-xs text-slate-500 mt-1">This will be used as the default currency for new trackers.</p>
         </div>
